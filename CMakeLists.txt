@@ -20,9 +20,10 @@ catkin_package(
         image_transport
 )
 
-set_target_properties(multi_robot_slam_node
-                      PROPERTIES OUTPUT_NAME multi_slam
+add_executable(imageConverter src/image_converter.cpp)
+set_target_properties(imageConverter
+                      PROPERTIES OUTPUT_NAME multi_slam_imageConverter
                       PREFIX "")
 
 
-add_executable(imageConverter src/image_converter.cpp)
+
