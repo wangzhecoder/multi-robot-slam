@@ -20,6 +20,8 @@ catkin_package(
         image_transport
 )
 
+include_directories(include ${catkin_INCLUDE_DIRS})
+
 add_executable(imageConverter src/image_converter.cpp)
 set_target_properties(imageConverter
                       PROPERTIES OUTPUT_NAME multi_slam_imageConverter
