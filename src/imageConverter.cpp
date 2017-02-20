@@ -1,3 +1,9 @@
+/*
+ * imageConverter.cpp
+ *
+ *  Created on: Feb 20, 2017
+ *      Author: turtlebot
+ */
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -13,13 +19,13 @@ class ImageConverter
   image_transport::ImageTransport it_;
   image_transport::Subscriber image_sub_;
   image_transport::Publisher image_pub_;
-  
+
 public:
   ImageConverter()
     : it_(nh_)
   {
     // Subscrive to input video feed and publish output video feed
-    image_sub_ = it_.subscribe("/camera/image_raw", 1, 
+    image_sub_ = it_.subscribe("/camera/rgb/image_raw", 1,
       &ImageConverter::imageCb, this);
     image_pub_ = it_.advertise("/image_converter/output_video", 1);
 
@@ -51,7 +57,7 @@ public:
     // Update GUI Window
     cv::imshow(OPENCV_WINDOW, cv_ptr->image);
     cv::waitKey(3);
-    
+
     // Output modified video stream
     image_pub_.publish(cv_ptr->toImageMsg());
   }
@@ -64,3 +70,6 @@ int main(int argc, char** argv)
   ros::spin();
   return 0;
 }
+
+
+
