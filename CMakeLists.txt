@@ -23,6 +23,8 @@ catkin_package(
 include_directories(include ${catkin_INCLUDE_DIRS})
 
 add_executable(imageConverter src/image_converter.cpp)
+
+target_link_libraries(imageConverter,${catkin_LIBRARIES})
 set_target_properties(imageConverter
                       PROPERTIES OUTPUT_NAME multi_slam_imageConverter
                       PREFIX "")
