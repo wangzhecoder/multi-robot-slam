@@ -10,14 +10,19 @@ find_package(catkin REQUIRED
     std_msgs
     image_transport
 )
-
-include_directories(${catkin_INCLUDE_DIRS})
-
+find_package(OpenCV 3 REQUIRED)
+message("OpenCV_INCLUDE_DIRS:"${OpenCV_INCLUDE_DIRS}\n)
+message("OpenCV_LIBRARIES:"${OpenCV_LIBRARIES}\n)
+# ${OpenCV_INCLUDE_DIRS}
+include_directories(${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+#link_directories(/usr/lib/x86_64-linux-gnu)
+message("catkin_INCLUDE_DIRS":${catkin_INCLUDE_DIRS}\n)
 catkin_package()
 
 add_executable(imageConverter src/imageConverter.cpp)
-target_link_libraries(imageConverter ${catkin_LIBRARIES})
-
+#${OpenCV_LIBRARIES}
+target_link_libraries(imageConverter ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+message("target_des:"${CATKIN_PACKAGE_BIN_DESTINATION})
 #install(TARGETS imageConverter
 #  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 #)
