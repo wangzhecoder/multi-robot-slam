@@ -15,6 +15,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/core/core.hpp>
+#include <opencv2/contrib/openfabmap.hpp>
 #include <vector>
 #include <boost/thread.hpp>
 #include <multi_robot_slam/Scenenode.h>
@@ -30,10 +31,14 @@ class ImageConverter
   ros::Subscriber mark_sub;
   ros::Publisher scene_node_pub;
   bool detSwitch;
+  int sceneFrames;
+  std::vector<cv::Mat> voc_src;
+  cv::Mat vocab;
 
   typedef struct
   {
 	  double x,y;
+//	  double angle;
 	  std::vector<cv::KeyPoint> keyPoints;
   }sceneNode;
   //std::vector<sceneNode> scene_Node;
@@ -48,7 +53,8 @@ public:
 };
 
 ImageConverter::ImageConverter()
-    : it_(nh_)
+    : it_(nh_),
+	  sceneFrames(0)
 {
     // Subscrive to input video feed and publish output video feed
 	detSwitch = false;
@@ -59,6 +65,7 @@ ImageConverter::ImageConverter()
     mark_sub = nh_.subscribe("visualization_marker_array",1,&ImageConverter::markArrayCallback,this);
     scene_node_pub = nh_.advertise<multi_robot_slam::Scenenode>("/image_converter/scene_node",1);
     //cv::namedWindow(OPENCV_WINDOW);
+    vocab = cv::imread("vocab.yml");
 }
 
 ImageConverter::~ImageConverter()
@@ -70,7 +77,9 @@ void ImageConverter::orbDetect(cv_bridge::CvImagePtr &cv_ptr,sceneNode node)//cv
 {
 
 //	cv::Ptr<cv::ORB> orb_detector=cv::ORB::create("orb_detector");
-	cv::ORB orb_detector=cv::ORB();
+//	cv::ORB orb_detector=cv::ORB();
+	cv::Ptr<cv::FeatureDetector> orb_detector =
+				cv::FeatureDetector::create("ORB");
 	ROS_INFO("orb created");
 	std::vector<cv::KeyPoint> keyPoints;
 	cv::Mat descriptors;
@@ -79,34 +88,122 @@ void ImageConverter::orbDetect(cv_bridge::CvImagePtr &cv_ptr,sceneNode node)//cv
 	cv_bridge::CvImage des_ptr;//(cv_ptr->header,sensor_msgs::image_encodings::MONO8,descriptors);
 	cv_bridge::CvImagePtr des_ptrr;
 	des_ptr.header=cv_ptr->header;
-	des_ptr.encoding=sensor_msgs::image_encodings::MONO8;
+	des_ptr.encoding=sensor_msgs::image_encodings::TYPE_32FC1;
 	//std::vector<cv::Mat> splitedImg;
 	//cv::split(cv_ptr->image,splitedImg);
 	ROS_INFO("before orb created");
 //	orb_detector->detect(cv_ptr->image,keyPoints,cv::Mat());
-	orb_detector.detect(cv_ptr->image, keyPoints, cv::Mat());
-	ROS_INFO("orb detected");
-//	orb_detector->compute(cv_ptr->image,keyPoints,descriptors);
-//	orb_detector->compute(cv_ptr->image,keyPoints,des_ptr.image);
-	orb_detector.compute(cv_ptr->image, keyPoints, des_ptr.image);
-//	descriptors.depth();
-	ROS_INFO("computed descriptors:[%d,%d]",descriptors.depth(),descriptors.channels());
+//	cv::imshow("orimg",cv_ptr->image);
+//	cv::Mat img32(cv_ptr->image.rows,cv_ptr->image.cols,CV_32FC3);
+//	cv::Mat img32;
+//	cv::convertScaleAbs(cv_ptr->image, img32, 1.0/255, 0);
+//	cv_ptr->image.convertTo(img32, CV_32FC3);
+//	cv::imshow("convertimg",img32);
+//	orb_detector.operator ()(cv_ptr->image, cv::Mat(), keyPoints, descriptors, 0);
+	orb_detector->detect(cv_ptr->image, keyPoints, cv::Mat());
+	ROS_INFO("orb_detector detected");
+	cv::Ptr<cv::DescriptorExtractor> descriptor_extractor =
+		        cv::DescriptorExtractor::create("ORB");
+	descriptor_extractor->compute(cv_ptr->image,keyPoints,descriptors);
+//	orb_detector.detect(cv_ptr->image, keyPoints, cv::Mat());
+//	ROS_INFO("vocab descriptor type:[%d]",vocab.type());
 
-//	des_ptr->header=cv_ptr->header;
-//	des_ptr->encoding=sensor_msgs::image_encodings::MONO8;
-//	des_ptr->CvImage(cv_ptr->header,sensor_msgs::image_encodings::MONO8,descriptors);
-//	ROS_INFO("cv_bridge::CvImagePtr des_ptr;");
-//	des_ptr->image=descriptors;
-//	des_ptr = cv_bridge::
-//	ROS_INFO("des_ptr->image=descriptors;");
-	des_ptr.toImageMsg(img);
-	ROS_INFO("des_ptr->image SIZE:[%d,%d]",cv_ptr->image.rows,cv_ptr->image.cols);
-	msg.image=img;
-	msg.px=node.x;
-	msg.py=node.y;
-	scene_node_pub.publish(msg);
-	ROS_INFO("published");
+	cv::Mat data;
+	descriptors.convertTo(data, CV_32F);
+	voc_src.push_back(data);
+	if(sceneFrames%1==0&&sceneFrames!=0)
+	{
+//		cv::BOWKMeansTrainer voc_trainer(100);//100
+	//	voc_trainer.add(data);
+	//	ROS_INFO("voc added");
+//		cv::Mat vocab = voc_trainer.cluster(data);
 
+		cv::Mat vocab_uchar;
+		float min=1.0,max=1.0;
+		for(int m = 0; m < vocab.rows; m++)
+		{
+			for(int l = 0; l < vocab.cols; l++)
+			{
+				if(vocab.at<float>(m,l)<min)
+					min=vocab.at<float>(m,l);
+				if(vocab.at<float>(m,l)>max)
+					max=vocab.at<float>(m,l);
+			}
+		}
+		if(min!=max)
+			vocab.convertTo(vocab_uchar, CV_8U,255.0/(max-min),-255.0*min/(max-min));
+
+	//	for(int m = 0; m < vocab_uchar.rows; m++)
+	//	for(int l = 0; l < vocab_uchar.cols; l++)
+	//	  {
+	//		  ROS_INFO("img data:[%d]",vocab_uchar.at<uchar>(m,l));
+	//	  }
+//		cv::imshow("vocab_uchar", vocab_uchar);
+		ROS_INFO("voc clustered");
+	//	cv::Ptr<cv::FeatureDetector> detector =
+	//			cv::FeatureDetector::create("ORB");
+		cv::Ptr<cv::DescriptorExtractor> extractor =
+				cv::DescriptorExtractor::create("ORB");
+
+		ROS_INFO("ORB created");
+		cv::Ptr<cv::DescriptorMatcher> matcher =
+			cv::DescriptorMatcher::create("BruteForce-Hamming");
+		ROS_INFO("matcher created");
+		cv::Mat kepointImg;
+		cv::drawKeypoints(cv_ptr->image,keyPoints,kepointImg);
+		cv::imshow("keypoints", kepointImg);
+	//	cv::waitKey();
+		cv::BOWImgDescriptorExtractor bide(extractor, matcher);
+		bide.setVocabulary(vocab_uchar);
+		ROS_INFO("bide vocab setted");
+	//	std::vector<cv::KeyPoint> kpts;
+	//	detector->detect(cv_ptr->image, kpts);
+	//	cv::Mat bow;
+		bide.compute(cv_ptr->image, keyPoints, des_ptr.image);
+//		for(int l = 0; l < des_ptr.image.cols; l++)
+//		  {
+//			  ROS_INFO("img data:[%f]",des_ptr.image.at<float>(l));
+//		  }
+
+
+		ROS_INFO("bide computed:[%d,%d}",des_ptr.image.type(),des_ptr.image.channels());
+//		cv::drawKeypoints(cv_ptr->image,keyPoints,cv_ptr->image);
+//		cv::imshow("keypoints", cv_ptr->image);
+	//	bow.convertTo(des_ptr.image, CV_8U);
+	//	orb_detector->compute(cv_ptr->image,keyPoints,descriptors);
+	//	orb_detector->compute(cv_ptr->image,keyPoints,des_ptr.image);
+	//	orb_detector.compute(cv_ptr->image, keyPoints, des_ptr.image);
+	//	descriptors.depth();
+	//	ROS_INFO("computed descriptors:[%d,%d]",descriptors.depth(),descriptors.channels());
+
+	//	des_ptr->header=cv_ptr->header;
+	//	des_ptr->encoding=sensor_msgs::image_encodings::MONO8;
+	//	des_ptr->CvImage(cv_ptr->header,sensor_msgs::image_encodings::MONO8,descriptors);
+	//	ROS_INFO("cv_bridge::CvImagePtr des_ptr;");
+	//	des_ptr->image=descriptors;
+	//	des_ptr = cv_bridge::
+	//	ROS_INFO("des_ptr->image=descriptors;");
+		des_ptr.toImageMsg(img);
+		ROS_INFO("des_ptr->image SIZE:[%d,%d]",des_ptr.image.rows,des_ptr.image.cols);
+		msg.image=img;
+		msg.px=node.x;
+		msg.py=node.y;
+		scene_node_pub.publish(msg);
+		ROS_INFO("published");
+
+		voc_src.clear();
+
+	}
+
+//	sceneFrames++;
+//	if(sceneFrames%2==0&&sceneFrames!=0)
+//	{
+//		std::string window_name = "SceneFrames:"+(char)(sceneFrames);
+//		cv::drawKeypoints(cv_ptr->image,keyPoints,cv_ptr->image);
+//		cv::imshow(window_name, cv_ptr->image);
+//	}
+
+	sceneFrames++;
 //	try
 //	  {
 //		 des_ptrr = cv_bridge::toCvCopy(msg.image, sensor_msgs::image_encodings::MONO8);
@@ -148,7 +245,7 @@ void ImageConverter::imageCb(const sensor_msgs::ImageConstPtr& msg)
 	}
 	// Update GUI Window
 //	cv::imshow("des", cv_ptr->image);
-//	cv::waitKey(33);
+	cv::waitKey(33);
 
 	// Output modified video stream
 	image_pub_.publish(cv_ptr->toImageMsg());
@@ -173,6 +270,7 @@ void ImageConverter::markArrayCallback(const visualization_msgs::MarkerArray::Co
 	{
 		s_node.x=msg->markers.back().pose.position.x;
 		s_node.y=msg->markers.back().pose.position.y;
+//		s_node.angle=msg->markers.back().pose.orientation;
 	}
 	detSwitch = true;
 
